@@ -327,19 +327,22 @@ async function syncToKiro(id) {
 
     if (os === 'windows') {
       // Windows PowerShell 命令
-      // 转义 JSON 中的特殊字符用于 PowerShell
-      const authTokenEscaped = authToken.replace(/'/g, "''");
-      const clientInfoEscaped = clientInfo.replace(/'/g, "''");
+      // 使用 .NET 方法写入无 BOM 的 UTF-8 文件，避免编码问题
+      const authTokenEscaped = authToken.replace(/`/g, '``').replace(/\$/g, '`$');
+      const clientInfoEscaped = clientInfo.replace(/`/g, '``').replace(/\$/g, '`$');
       
       command = `$ssoDir = "$env:USERPROFILE\\.aws\\sso\\cache"
 if (!(Test-Path $ssoDir)) { New-Item -ItemType Directory -Force -Path $ssoDir | Out-Null }
-@'
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+$authToken = @"
 ${authTokenEscaped}
-'@ | Out-File -FilePath "$ssoDir\\kiro-auth-token.json" -Encoding UTF8 -NoNewline
-@'
+"@
+$clientInfo = @"
 ${clientInfoEscaped}
-'@ | Out-File -FilePath "$ssoDir\\${clientIdHash}.json" -Encoding UTF8 -NoNewline
-Write-Host "已同步至 Kiro IDE" -ForegroundColor Green`;
+"@
+[System.IO.File]::WriteAllText("$ssoDir\\kiro-auth-token.json", $authToken, $utf8NoBom)
+[System.IO.File]::WriteAllText("$ssoDir\\${clientIdHash}.json", $clientInfo, $utf8NoBom)
+Write-Host "已同步至 Kiro IDE (UTF-8 无 BOM)" -ForegroundColor Green`;
       terminalName = 'PowerShell';
     } else {
       // macOS / Linux bash 命令
